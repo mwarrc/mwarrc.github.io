@@ -1,91 +1,92 @@
-# Sample workflow for building and deploying a Next.js site to GitHub Pages
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy mwarrc.github.io → https://mwarrc.github.io/
 #
-# To get started with Next.js see: https://nextjs.org/docs/getting-started
-#
-name: Deploy Next.js site to Pages
+# This is a USER GitHub Pages site (mwarrc.github.io).
+# It is served from the ROOT path `/`, not a sub-path.
+# Therefore we do NOT use configure-pages with static_site_generator: next,
+# because that action auto-injects a basePath (e.g. /mwarrc) which breaks
+# root-level user sites.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy to GitHub Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Required permissions for Pages deployment
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Only one deployment at a time; never cancel an in-progress run
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Build job
+  # ── Build ──────────────────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Detect package manager
         id: detect-package-manager
         run: |
           if [ -f "${{ github.workspace }}/package-lock.json" ]; then
-            echo "manager=npm" >> $GITHUB_OUTPUT
-            echo "command=ci" >> $GITHUB_OUTPUT
+            echo "manager=npm"    >> $GITHUB_OUTPUT
+            echo "command=ci"    >> $GITHUB_OUTPUT
             echo "runner=npx --no-install" >> $GITHUB_OUTPUT
-            exit 0
           elif [ -f "${{ github.workspace }}/yarn.lock" ]; then
-            echo "manager=yarn" >> $GITHUB_OUTPUT
+            echo "manager=yarn"  >> $GITHUB_OUTPUT
             echo "command=install" >> $GITHUB_OUTPUT
-            echo "runner=yarn" >> $GITHUB_OUTPUT
-            exit 0
+            echo "runner=yarn"   >> $GITHUB_OUTPUT
           elif [ -f "${{ github.workspace }}/pnpm-lock.yaml" ]; then
-            echo "manager=pnpm" >> $GITHUB_OUTPUT
+            echo "manager=pnpm"  >> $GITHUB_OUTPUT
             echo "command=install" >> $GITHUB_OUTPUT
-            echo "runner=pnpm" >> $GITHUB_OUTPUT
-            exit 0
+            echo "runner=pnpm"   >> $GITHUB_OUTPUT
           else
             echo "Unable to determine package manager" >&2
             exit 1
           fi
-      - name: Setup Node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: ${{ steps.detect-package-manager.outputs.manager }}
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          # Automatically inject basePath in your Next.js config file and disable
-          # server side image optimization (further optimization can be done manually).
-          # If you use this, you can remove unoptimized: true from next.config.ts if you want,
-          # but keeping it is safer for local builds too.
-          static_site_generator: next
-      - name: Restore cache
+
+      # NOTE: We intentionally skip actions/configure-pages here.
+      # That action auto-injects basePath from the repo name, which would
+      # route everything to /mwarrc.github.io/ instead of the root /.
+      # Our next.config.ts is already correct for a root-level user site.
+
+      - name: Restore Next.js build cache
         uses: actions/cache@v4
         with:
-          path: |
-            .next/cache
-          # Generate a new cache whenever packages or source files change.
+          path: .next/cache
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
-          # If source files change but packages don't, rebuild from a prior cache.
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
+
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
-      - name: Build with Next.js
+
+      - name: Build (static export)
+        # GITHUB_ACTIONS=true tells Next.js we're in CI; no extra basePath injection
+        env:
+          GITHUB_ACTIONS: true
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
-      - name: Upload artifact
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
 
-  # Deployment job
+  # ── Deploy ─────────────────────────────────────────────────────────────────
   deploy:
     environment:
       name: github-pages
@@ -96,3 +97,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
